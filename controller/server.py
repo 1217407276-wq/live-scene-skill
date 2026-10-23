@@ -46,7 +46,9 @@ def render(p):
         f'<input type="radio" name="asset_id" value="{esc(a["id"])}" required></label>'
         for a in p["assets"] if Path(a["path"]).is_file()
     )
-    options = "".join(f'<label><input type="checkbox" name="allow" value="{esc(x)}">{esc(x)}</label>' for x in
+    saved = p.get("last_changes", {})
+    saved_allow = saved.get("allow", [])
+    options = "".join(f'<label><input type="checkbox" name="allow" value="{esc(x)}"{" checked" if x in saved_allow else ""}>{esc(x)}</label>' for x in
                       ["镜头/主体尺寸", "空间纵深", "扩图", "光线", "品牌配色", "Logo位置/比例", "棉花", "家具/装置", "大促点缀", "画面简化"])
     state = f'<p>项目 {esc(p["id"])} · 第 {p["round_number"]} 轮 · 阶段 {esc(p["phase"])}</p>'
     err = f'<p class="error">{esc(p["last_error"])}</p>' if p["last_error"] else ""
@@ -63,12 +65,12 @@ def render(p):
     elif p["phase"] == "confirmed":
         panel = f'<form method="post" action="/generate?project={esc(p["id"])}"><button>生成本轮 A/B/C</button></form>'
     elif p["phase"] == "locked":
-        locked_options = "".join(f'<label><input type="checkbox" name="allow" value="{esc(x)}">{esc(x)}</label>' for x in
+        locked_options = "".join(f'<label><input type="checkbox" name="allow" value="{esc(x)}"{" checked" if x in saved_allow else ""}>{esc(x)}</label>' for x in
                                   ["镜头/主体尺寸", "空间纵深", "扩图", "光线", "品牌配色", "Logo位置/比例", "棉花", "家具/装置", "大促点缀", "画面简化"])
         panel = f'''<form method="post" action="/refine?project={esc(p['id'])}"><p>锁定原图ID：{esc(p['locked_asset_id'])}</p>
           <fieldset><legend>本轮允许修改（多选）</legend>{locked_options}</fieldset>
-          <input name="allow_text" placeholder="其他允许修改项（逗号分隔）"><input name="preserve" placeholder="必须保持不变（必填）"><input name="forbid" placeholder="禁止改动（必填）">
-          <textarea name="free_text" placeholder="自由输入本轮修改"></textarea><button>按锁定原图生成下一轮 A/B/C</button></form>'''
+          <input name="allow_text" placeholder="其他允许修改项（逗号分隔）"><input name="preserve" value="{esc(', '.join(saved.get('preserve', [])))}" placeholder="必须保持不变（必填）"><input name="forbid" value="{esc(', '.join(saved.get('forbid', [])))}" placeholder="禁止改动（必填）">
+          <textarea name="free_text" placeholder="自由输入本轮修改">{esc(saved.get('free_text', ''))}</textarea><button>按锁定原图生成下一轮 A/B/C</button></form>'''
     return f'''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>直播间场景工作台</title><style>body{{font:16px system-ui;max-width:1000px;margin:2rem auto;padding:0 1rem;background:#f6f5f1;color:#222}}section,form{{background:white;padding:1rem;border-radius:12px;margin:1rem 0}}.cards{{display:flex;gap:1rem;flex-wrap:wrap}}.card{{width:28%;min-width:180px}}img{{width:100%;aspect-ratio:3/4;object-fit:contain;background:#eee}}small{{display:block;overflow-wrap:anywhere}}fieldset label{{display:inline-block;margin:.5rem}}textarea,input{{display:block;margin:.5rem 0;padding:.7rem;width:min(95%,600px)}}button{{padding:.8rem 1.2rem;background:#00AC97;color:white;border:0;border-radius:8px;cursor:pointer}}.error{{color:#a00}}</style>
     <h1>AI直播间场景工作台</h1>{state}<details><summary>品牌素材状态</summary><ul>{brand_lines}</ul><p>标准绿：#00AC97 / RGB(0,172,151)；生成色彩仍需后期校验。</p></details>{err}{panel}</html>'''

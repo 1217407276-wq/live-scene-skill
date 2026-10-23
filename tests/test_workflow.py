@@ -78,8 +78,10 @@ class WorkflowTests(unittest.TestCase):
         p1 = self.new_round()
         chosen = next(a for a in p1["assets"] if a["variant"] == "B" and a["round_number"] == 1)
         before = Path(chosen["path"]).read_bytes()
-        self.wf.lock_asset(self.pid, chosen["id"])
         changes = {"allow": ["棉花数量"], "preserve": ["沙发与窗户位置"], "forbid": ["重构布局"], "free_text": "棉花减少30%"}
+        locked = self.wf.lock_asset(self.pid, chosen["id"], changes)
+        self.assertIn("棉花减少30%", render(locked))
+        self.assertIn("沙发与窗户位置", render(locked))
         p2 = self.wf.refine(self.pid, changes)
         self.assertEqual(self.provider.edit_calls[-1][0], Path(chosen["path"]).resolve())
         self.assertEqual(self.provider.edit_calls[-1][1], before)
