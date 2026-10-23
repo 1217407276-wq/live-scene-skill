@@ -1,4 +1,4 @@
-# 直播间场景 Skill V3.1.0
+# 直播间场景 Skill V3.3.0（开发版）
 
 全棉时代 × 奈丝公主｜团队可复用的AI直播间背景工作流。
 
@@ -22,9 +22,9 @@
 - [每轮输出检查清单](references/output-checklist.md)
 - [团队验收用例](tests/acceptance.md)
 - [同事5分钟文字教程](docs/同事5分钟上手教程.md)
-- [版本历史](CHANGELOG.md)
+- [版本历史](CHANGELOG.md)\n- [Skill与程序控制的能力边界](references/runtime-boundaries.md)\n- [可运行的本地工作台](controller/README.md)
 
-## 官方品牌素材
+## 运行时能力边界\nSkill文字不能强制显示交互控件或执行原图编辑。V3.3提供本地持久化工作台；需要配置图像生成/编辑提供方后才能真实出图。当前仓库不包含该平台适配器或凭据。\n\n## 官方品牌素材
 - 全棉时代：[绿色Logo](assets/logos/三层LOGO-绿.png) / [白色Logo](assets/logos/三层LOGO-白.png)
 - 奈丝公主：[标准Logo](assets/logos/LOGO.png)
 - [全棉时代标准绿参考色卡](assets/colors/purcotton-green.svg)
