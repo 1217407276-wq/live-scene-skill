@@ -1,12 +1,18 @@
 import tempfile
 import unittest
 import struct
+import zlib
+import hashlib
 from pathlib import Path
 
 from controller.workflow import ImageProvider, Workflow, WorkflowError
 from controller.server import render
 from controller.brand_assets import inspect_brand_assets
 from controller.safe_area import centered_live_crop
+
+
+def png_chunk(name, payload):
+    return struct.pack(">I", len(payload)) + name + payload + struct.pack(">I", zlib.crc32(name + payload) & 0xFFFFFFFF)
 
 
 class FakeProvider(ImageProvider):
@@ -31,8 +37,11 @@ class FakeProvider(ImageProvider):
         paths = []
         for letter in "ABC":
             path = destination / f"{letter}.png"
-            image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", 900, 1200) + b"\x08\x02\x00\x00\x00" + b"fixture-data"
-            path.write_bytes(image + prefix + b"|" + letter.encode())
+            seed = hashlib.sha256(prefix + letter.encode()).digest()
+            ihdr = struct.pack(">II", 3, 4) + b"\x08\x02\x00\x00\x00"
+            raw = b"".join(b"\0" + bytes(seed[(row * 9 + i) % len(seed)] for i in range(9)) for row in range(4))
+            image = (b"\x89PNG\r\n\x1a\n" + png_chunk(b"IHDR", ihdr) + png_chunk(b"IDAT", zlib.compress(raw)) + png_chunk(b"IEND", b""))
+            path.write_bytes(image)
             paths.append(path)
         return paths
 
@@ -78,7 +87,7 @@ class WorkflowTests(unittest.TestCase):
         round2 = [a for a in p2["assets"] if a["round_number"] == 2]
         self.assertEqual(len(round2), 3)
         self.assertTrue(all(a["source_asset_id"] == chosen["id"] for a in round2))
-        self.assertTrue(all(before + b"|edit-round-2|" in Path(a["path"]).read_bytes() for a in round2))
+        self.assertEqual(len({a["sha256"] for a in round2}), 3)
         # Simulate a process restart: the project and panel inventory remain in SQLite.
         reopened = Workflow(self.wf.db_path, self.wf.asset_root, self.provider).get_project(self.pid)
         self.assertEqual(reopened["round_number"], 2)

@@ -9,8 +9,8 @@ import hashlib
 import json
 import struct
 import sqlite3
+import zlib
 import uuid
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -49,11 +49,39 @@ def sha256_file(path: Path) -> str:
 
 
 def png_dimensions(path: Path) -> tuple[int, int]:
-    with path.open("rb") as f:
-        header = f.read(24)
-    if len(header) != 24 or not header.startswith(b"\x89PNG\r\n\x1a\n") or header[12:16] != b"IHDR":
-        raise WorkflowError("provider outputs must be valid PNG files with an IHDR header")
-    return struct.unpack(">II", header[16:24])
+    data = path.read_bytes()
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise WorkflowError("provider outputs must be PNG files")
+    offset, width, height, idat, saw_end = 8, None, None, bytearray(), False
+    while offset + 12 <= len(data):
+        length = struct.unpack(">I", data[offset:offset + 4])[0]
+        kind = data[offset + 4:offset + 8]
+        end = offset + 12 + length
+        if end > len(data):
+            raise WorkflowError("provider returned a truncated PNG chunk")
+        payload = data[offset + 8:offset + 8 + length]
+        expected_crc = struct.unpack(">I", data[offset + 8 + length:end])[0]
+        if zlib.crc32(kind + payload) & 0xFFFFFFFF != expected_crc:
+            raise WorkflowError("provider returned a PNG with an invalid chunk checksum")
+        if kind == b"IHDR":
+            if length != 13 or width is not None:
+                raise WorkflowError("provider returned a malformed PNG header")
+            width, height = struct.unpack(">II", payload[:8])
+        elif kind == b"IDAT":
+            idat.extend(payload)
+        elif kind == b"IEND":
+            saw_end = True
+            if length != 0 or end != len(data):
+                raise WorkflowError("provider returned a malformed PNG end chunk")
+            break
+        offset = end
+    if width is None or height is None or not idat or not saw_end:
+        raise WorkflowError("provider outputs must be complete PNG files with IHDR, IDAT, and IEND")
+    try:
+        zlib.decompress(idat)
+    except zlib.error as exc:
+        raise WorkflowError("provider returned a PNG with invalid compressed image data") from exc
+    return width, height
 
 
 class Workflow:
